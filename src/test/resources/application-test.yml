@@ -1,0 +1,35 @@
+app:
+  base-url: http://localhost:8080
+  cache-ttl: PT10M
+  api-key: test-api-key-1234567890
+  api-key-pepper: test-api-key-pepper-1234567890
+  rate-limit:
+    requests: 1000
+    window: PT1M
+  redirect-rate-limit:
+    requests: 1000
+    window: PT1M
+  analytics-retention: P365D
+  expired-url-retention: P30D
+  cleanup-batch-size: 100
+  cleanup-cron: "0 0 3 * * *"
+  cors-allowed-origins: []
+
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 200ms
+      connect-timeout: 200ms
+
+logging:
+  level:
+    root: WARN
+    com.example.shortener: INFO

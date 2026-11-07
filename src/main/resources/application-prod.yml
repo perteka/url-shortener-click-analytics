@@ -1,0 +1,23 @@
+app:
+  base-url: ${APP_BASE_URL}
+  api-key: ${API_KEY}
+  api-key-pepper: ${API_KEY_PEPPER}
+  cors-allowed-origins: ${CORS_ALLOWED_ORIGINS:}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+  prometheus:
+    metrics:
+      export:
+        enabled: false
+
+logging:
+  level:
+    root: INFO
+    com.example.shortener: INFO
