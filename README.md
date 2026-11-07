@@ -17,6 +17,44 @@ A production-oriented Java 17 / Spring Boot REST API for creating short links, r
 - Request correlation IDs, structured JSON errors and security headers.
 - Docker Compose stack, multi-stage Dockerfile and GitHub Actions CI.
 
+## Architecture
+
+```mermaid
+flowchart LR
+    Client[Browser / API client]
+    Proxy[Reverse proxy / TLS]
+    App[Spring Boot API]
+    Auth[API key and rate-limit checks]
+    Redirect[Redirect service]
+    Analytics[Analytics service]
+    Cleanup[Scheduled cleanup]
+    Cache[(Redis)]
+    DB[(PostgreSQL)]
+    Events[Async click-event worker]
+    Destination[Destination URL]
+
+    Client --> Proxy --> App
+    App --> Auth
+    Auth <--> Cache
+    App -->|Create, update, list| DB
+    App --> Redirect
+    Redirect -->|Cache lookup| Cache
+    Redirect -->|Cache miss: one lookup| DB
+    Redirect -->|302 Location| Client
+    Client --> Destination
+    Redirect -->|After transaction commit| Events
+    Events -->|Persist click| DB
+    App --> Analytics
+    Analytics -->|Group by UTC day, referrer, device| DB
+    Cleanup -->|Advisory lock and batched cleanup| DB
+    Cleanup -->|Evict expired-link entries| Cache
+```
+
+PostgreSQL is the source of truth. Redis is used for short-link caching and
+distributed rate limits; redirects fall back to PostgreSQL on a cache miss.
+Click events are persisted asynchronously after the redirect transaction
+commits.
+
 ## Requirements
 
 - Java 17+
