@@ -1,7 +1,7 @@
 server:
   port: ${SERVER_PORT:8080}
   shutdown: graceful
-  forward-headers-strategy: native
+  forward-headers-strategy: none
   error:
     include-message: never
     include-stacktrace: never
@@ -10,6 +10,8 @@ server:
       enabled: false
 
 spring:
+  profiles:
+    default: prod
   application:
     name: url-shortener
   lifecycle:
@@ -77,8 +79,8 @@ management:
 app:
   base-url: ${APP_BASE_URL:http://localhost:8080}
   cache-ttl: ${CACHE_TTL:PT1H}
-  api-key: ${API_KEY:local-development-key}
-  api-key-pepper: ${API_KEY_PEPPER:local-development-pepper}
+  api-key: ${API_KEY}
+  api-key-pepper: ${API_KEY_PEPPER}
   rate-limit:
     requests: ${RATE_LIMIT_REQUESTS:100}
     window: ${RATE_LIMIT_WINDOW:PT1M}
@@ -89,6 +91,8 @@ app:
   expired-url-retention: ${EXPIRED_URL_RETENTION:P30D}
   cleanup-batch-size: ${CLEANUP_BATCH_SIZE:500}
   cleanup-cron: ${CLEANUP_CRON:0 0 3 * * *}
+  trusted-proxies: ${TRUSTED_PROXIES:}
+  allowed-destination-hosts: ${ALLOWED_DESTINATION_HOSTS:}
   cors-allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}
 
 logging:

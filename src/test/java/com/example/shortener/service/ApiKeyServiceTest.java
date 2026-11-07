@@ -192,4 +192,22 @@ class ApiKeyServiceTest {
         assertThrows(IllegalStateException.class, () -> service(environment).run());
         verifyNoInteractions(repository);
     }
+
+    @Test
+    void rejectsComposeDevelopmentSecretsInProduction() {
+        MockEnvironment environment = new MockEnvironment();
+        environment.setActiveProfiles("prod");
+        AppProperties composeDefaults = new AppProperties(
+                properties.baseUrl(), properties.cacheTtl(),
+                "compose-development-key-0123456789abcdef",
+                "compose-development-pepper-0123456789abcdef",
+                properties.rateLimit(), properties.redirectRateLimit(),
+                properties.analyticsRetention(), properties.expiredUrlRetention(),
+                properties.cleanupBatchSize(), properties.cleanupCron(), properties.corsAllowedOrigins()
+        );
+        ApiKeyService service = new ApiKeyService(repository, hasher, composeDefaults, environment);
+
+        assertThrows(IllegalStateException.class, service::run);
+        verifyNoInteractions(repository);
+    }
 }

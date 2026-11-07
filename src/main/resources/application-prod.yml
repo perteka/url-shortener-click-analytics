@@ -2,6 +2,8 @@ app:
   base-url: ${APP_BASE_URL}
   api-key: ${API_KEY}
   api-key-pepper: ${API_KEY_PEPPER}
+  trusted-proxies: ${TRUSTED_PROXIES:}
+  allowed-destination-hosts: ${ALLOWED_DESTINATION_HOSTS:}
   cors-allowed-origins: ${CORS_ALLOWED_ORIGINS:}
 
 management:

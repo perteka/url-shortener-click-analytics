@@ -29,7 +29,6 @@ public class ClickEventService {
     public void record(RedirectEvent event) {
         clicks.save(new ClickEvent(
                 shortUrls.getReferenceById(event.shortUrlId()),
-                event.referrer(),
                 event.referrerHost(),
                 event.deviceType(),
                 event.clickedAt()

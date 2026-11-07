@@ -6,7 +6,6 @@ import java.time.Instant;
 
 public record RedirectEvent(
         Long shortUrlId,
-        String referrer,
         String referrerHost,
         DeviceType deviceType,
         Instant clickedAt

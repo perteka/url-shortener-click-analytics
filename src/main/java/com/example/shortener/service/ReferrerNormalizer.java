@@ -14,7 +14,7 @@ public class ReferrerNormalizer {
         try {
             URI uri = URI.create(referrer.trim());
             String host = uri.getHost();
-            return host == null ? null : host.toLowerCase(Locale.ROOT);
+            return host == null || host.length() > 255 ? null : host.toLowerCase(Locale.ROOT);
         } catch (RuntimeException exception) {
             return null;
         }

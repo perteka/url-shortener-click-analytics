@@ -48,7 +48,6 @@ class RedirectServiceTest {
         ArgumentCaptor<RedirectEvent> event = ArgumentCaptor.forClass(RedirectEvent.class);
         verify(events).publishEvent(event.capture());
         assertEquals(42L, event.getValue().shortUrlId());
-        assertEquals("https://ref.example/path", event.getValue().referrer());
         assertEquals("ref.example", event.getValue().referrerHost());
         assertEquals(DeviceType.MOBILE, event.getValue().deviceType());
         assertEquals(NOW, event.getValue().clickedAt());

@@ -13,8 +13,6 @@ import java.util.Optional;
 
 @Service
 public class RedirectService {
-    private static final int MAX_REFERRER_LENGTH = 512;
-
     private final ShortUrlRepository shortUrls;
     private final CacheService cache;
     private final ApplicationEventPublisher events;
@@ -51,17 +49,9 @@ public class RedirectService {
             cache.put(code, id, target, entity.getExpiresAt());
         }
 
-        String referrer = truncateReferrer(rawReferrer);
+        String referrerHost = referrerNormalizer.host(rawReferrer);
         DeviceType resolvedDevice = deviceType == null ? DeviceType.UNKNOWN : deviceType;
-        events.publishEvent(new RedirectEvent(id, referrer, referrerNormalizer.host(referrer), resolvedDevice, now));
+        events.publishEvent(new RedirectEvent(id, referrerHost, resolvedDevice, now));
         return target;
-    }
-
-    private String truncateReferrer(String referrer) {
-        if (referrer == null || referrer.isBlank()) {
-            return null;
-        }
-        String value = referrer.trim();
-        return value.substring(0, Math.min(value.length(), MAX_REFERRER_LENGTH));
     }
 }

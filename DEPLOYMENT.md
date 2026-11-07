@@ -46,7 +46,7 @@ All runtime settings are environment variables (durations use ISO-8601, e.g.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `SPRING_PROFILES_ACTIVE` | none (`prod` in the Docker image) | Spring profile; `prod` enables fail-fast secret validation |
+| `SPRING_PROFILES_ACTIVE` | `prod` | Spring profile; `prod` enables fail-fast secret validation; use `dev` only for local development |
 | `SERVER_PORT` | `8080` | HTTP port |
 | `APP_BASE_URL` | `http://localhost:8080` | Base URL used in created short URLs |
 | `DATABASE_URL` | `jdbc:postgresql://localhost:5432/shortener` | JDBC URL |
@@ -63,13 +63,16 @@ All runtime settings are environment variables (durations use ISO-8601, e.g.
 | `CLEANUP_BATCH_SIZE` | `500` | Batched cleanup size |
 | `CLEANUP_CRON` | `0 0 3 * * *` | Cleanup schedule (UTC) |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:3000,http://localhost:5173` | Comma-separated allowed origins; `*` allows all |
+| `TRUSTED_PROXIES` | empty | Comma-separated proxy IP addresses allowed to supply `X-Forwarded-For` |
+| `ALLOWED_DESTINATION_HOSTS` | empty | Optional comma-separated exact host allowlist for redirect destinations; empty allows any valid HTTP(S) host |
 
 ### Production secret requirements
 
 The `prod` profile fails fast at startup when `API_KEY` or `API_KEY_PEPPER` are
-missing or invalid: they must be at least 32 characters long and must not be the
-built-in development defaults (`local-development-key` /
-`local-development-pepper`).
+missing or invalid: they must be at least 32 characters long and must not
+contain known placeholder or development strings. Compose also requires
+`POSTGRES_PASSWORD` and `REDIS_PASSWORD`; secret values in `.env.example` are
+deliberately blank, so Compose refuses to start until they are provided.
 
 Changing `API_KEY_PEPPER` invalidates every stored API key hash. Rotate it only
 together with a planned key migration.
@@ -81,7 +84,7 @@ together with a planned key migration.
 ```bash
 cd url-shortener
 cp .env.example .env
-# Edit .env: set strong API_KEY, API_KEY_PEPPER and POSTGRES_PASSWORD.
+# Edit .env: set distinct strong API_KEY, API_KEY_PEPPER, POSTGRES_PASSWORD and REDIS_PASSWORD.
 docker compose up --build -d
 ```
 
@@ -91,8 +94,10 @@ PostgreSQL and Redis are bound to `127.0.0.1` only; the app is published on
 ### Option B — infrastructure only, run the app locally
 
 ```bash
+cp .env.example .env
+# Fill in all secret values; note REDIS_PASSWORD for the local app process.
 docker compose up -d postgres redis
-mvn spring-boot:run
+SPRING_PROFILES_ACTIVE=dev REDIS_PASSWORD=your-redis-password mvn spring-boot:run
 ```
 
 Development defaults apply: `API_KEY=local-development-key`,
@@ -107,7 +112,8 @@ cd url-shortener
 cp .env.example .env
 # Set: SPRING_PROFILES_ACTIVE=prod, APP_BASE_URL=https://<your-domain>,
 #     API_KEY=<>=32+ random chars, API_KEY_PEPPER=<>=32+ random chars,
-#     POSTGRES_PASSWORD=<strong password>, CORS_ALLOWED_ORIGINS=<allowed origins>
+#     POSTGRES_PASSWORD=<strong password>, REDIS_PASSWORD=<strong password>,
+#     CORS_ALLOWED_ORIGINS=<allowed origins>
 docker compose up --build -d
 docker compose ps
 docker compose logs -f app
@@ -130,18 +136,21 @@ java -jar target/url-shortener-1.0.0.jar \
   --spring.data.redis.port=6379
 ```
 
-Set the `prod` profile or rely on the image default, and always provide
-`APP_BASE_URL`, `API_KEY` and `API_KEY_PEPPER`.
+The application defaults to the `prod` profile when none is selected. Always
+provide `APP_BASE_URL`, `API_KEY` and `API_KEY_PEPPER` for production.
 
 ## TLS and reverse proxy
 
-Terminate TLS at a reverse proxy or load balancer in production. Configure the
-forward-headers strategy so generated URLs and rate-limit client IPs are
-correct:
+Terminate TLS at a reverse proxy or load balancer in production. Set
+`TRUSTED_PROXIES` to the proxy's exact IP address(es). The application does not
+trust forwarded headers globally; it reads `X-Forwarded-For` only when the
+socket peer matches a configured trusted proxy. Ensure the proxy removes any
+client-supplied forwarding header and appends the actual client address. Set
+HSTS at the TLS-terminating proxy:
 
 ```yaml
-server:
-  forward-headers-strategy: native
+app:
+  trusted-proxies: ${TRUSTED_PROXIES:}
 ```
 
 Example nginx site:
@@ -200,12 +209,14 @@ curl "http://localhost:8080/api/urls/smoke1/analytics?days=7" \
 
 ## Database and Redis provisioning
 
-- Flyway applies `V1__init.sql`, `V2__add_soft_delete_and_referrer.sql` and
-  `V3__add_click_referrer_composite_index.sql` automatically at startup.
+- Flyway applies `V1__init.sql` through `V4__remove_raw_referrer.sql`
+  automatically at startup. V4 removes raw referrer URLs; analytics retains
+  referrer-host grouping.
 - Hibernate runs with `ddl-auto=validate` and fails fast on schema drift.
 - PostgreSQL must be reachable from the app container/host network; the JDBC URL
   is supplied through `DATABASE_URL`.
-- Redis must be reachable through `REDIS_HOST`/`REDIS_PORT`; cache writes are
+- Redis must be reachable through `REDIS_HOST`/`REDIS_PORT` and protected with
+  `REDIS_PASSWORD`; Compose enables Redis password authentication. Cache writes are
   best-effort and the app falls back to the database when Redis is unavailable.
 
 ## Backup and recovery

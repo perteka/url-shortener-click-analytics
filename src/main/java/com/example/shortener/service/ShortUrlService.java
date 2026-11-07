@@ -39,6 +39,7 @@ public class ShortUrlService {
     private final CacheService cache;
     private final ShortUrlMapper mapper;
     private final ShortUrlWriter writer;
+    private final DestinationHostPolicy destinationHostPolicy;
     private final Clock clock;
     private final SecureRandom random = new SecureRandom();
 
@@ -46,11 +47,13 @@ public class ShortUrlService {
                            CacheService cache,
                            ShortUrlMapper mapper,
                            ShortUrlWriter writer,
+                           DestinationHostPolicy destinationHostPolicy,
                            Clock clock) {
         this.shortUrls = shortUrls;
         this.cache = cache;
         this.mapper = mapper;
         this.writer = writer;
+        this.destinationHostPolicy = destinationHostPolicy;
         this.clock = clock;
     }
 
@@ -66,7 +69,7 @@ public class ShortUrlService {
         if (customCode != null) {
             try {
                 ShortUrl saved = writer.persist(customCode, url, owner.getId(), expiresAt);
-                cache.put(saved.getShortCode(), saved.getId(), saved.getOriginalUrl(), saved.getExpiresAt());
+                cache.putAfterCommit(saved.getShortCode(), saved.getId(), saved.getOriginalUrl(), saved.getExpiresAt());
                 return mapper.toResponse(saved);
             } catch (DataIntegrityViolationException exception) {
                 throw new ConflictException("Short code is already in use");
@@ -77,7 +80,7 @@ public class ShortUrlService {
             String code = generateCode();
             try {
                 ShortUrl saved = writer.persist(code, url, owner.getId(), expiresAt);
-                cache.put(saved.getShortCode(), saved.getId(), saved.getOriginalUrl(), saved.getExpiresAt());
+                cache.putAfterCommit(saved.getShortCode(), saved.getId(), saved.getOriginalUrl(), saved.getExpiresAt());
                 return mapper.toResponse(saved);
             } catch (DataIntegrityViolationException exception) {
                 log.warn("Generated short code {} collided; retrying", code);
@@ -232,6 +235,9 @@ public class ShortUrlService {
                     || uri.getHost() == null
                     || uri.getUserInfo() != null) {
                 throw new BadRequestException("URL must be an absolute http or https URL without credentials");
+            }
+            if (!destinationHostPolicy.isAllowed(uri.getHost())) {
+                throw new BadRequestException("URL host is not allowed");
             }
         } catch (IllegalArgumentException exception) {
             throw new BadRequestException("URL is not a valid URI");

@@ -111,12 +111,24 @@ public class ApiKeyService implements CommandLineRunner {
         }
         String apiKey = properties.apiKey();
         String pepper = properties.apiKeyPepper();
-        if (apiKey == null || apiKey.length() < 32 || apiKey.contains("local-development")) {
+        if (isWeakProductionSecret(apiKey)) {
             throw new IllegalStateException("API_KEY must be a strong random value of at least 32 characters in prod");
         }
-        if (pepper == null || pepper.length() < 32 || pepper.contains("local-development")) {
+        if (isWeakProductionSecret(pepper)) {
             throw new IllegalStateException("API_KEY_PEPPER must be a strong random value of at least 32 characters in prod");
         }
+    }
+
+    private boolean isWeakProductionSecret(String secret) {
+        if (secret == null || secret.length() < 32) {
+            return true;
+        }
+        String normalized = secret.toLowerCase(java.util.Locale.ROOT);
+        return normalized.contains("development")
+                || normalized.contains("change-me")
+                || normalized.contains("replace-me")
+                || normalized.contains("example")
+                || normalized.contains("password");
     }
 
     private String generateRawKey() {

@@ -109,6 +109,23 @@ class CacheServiceTest {
     }
 
     @Test
+    void writesOnlyAfterTransactionCommit() {
+        CacheService cache = cache();
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            cache.putAfterCommit("abc1234", 42L, "https://example.com", null);
+            verify(values, never()).set(any(), any(), any(Duration.class));
+
+            TransactionSynchronizationManager.getSynchronizations()
+                    .forEach(TransactionSynchronization::afterCommit);
+
+            verify(values).set("short-url:abc1234", "42||https://example.com", Duration.ofHours(1));
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
+
+    @Test
     void capsCacheLifetimeAtUrlExpiry() {
         CacheService cache = cache();
         Instant expiry = NOW.plusSeconds(30);

@@ -22,9 +22,6 @@ public class ClickEvent {
     @Column(name = "clicked_at", nullable = false, updatable = false)
     private Instant clickedAt;
 
-    @Column(length = 512)
-    private String referrer;
-
     @Column(name = "referrer_host", length = 255)
     private String referrerHost;
 
@@ -35,9 +32,8 @@ public class ClickEvent {
     protected ClickEvent() {
     }
 
-    public ClickEvent(ShortUrl shortUrl, String referrer, String referrerHost, DeviceType deviceType, Instant clickedAt) {
+    public ClickEvent(ShortUrl shortUrl, String referrerHost, DeviceType deviceType, Instant clickedAt) {
         this.shortUrl = shortUrl;
-        this.referrer = referrer;
         this.referrerHost = referrerHost;
         this.deviceType = deviceType;
         this.clickedAt = clickedAt;
@@ -53,10 +49,6 @@ public class ClickEvent {
 
     public Instant getClickedAt() {
         return clickedAt;
-    }
-
-    public String getReferrer() {
-        return referrer;
     }
 
     public String getReferrerHost() {

@@ -14,6 +14,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class RateLimitService {
+    private static final int MAX_LOCAL_WINDOWS = 10_000;
     private static final Logger log = LoggerFactory.getLogger(RateLimitService.class);
     private static final DefaultRedisScript<Long> INCREMENT_SCRIPT = new DefaultRedisScript<>(
             "local current = redis.call('INCR', KEYS[1]); " +
@@ -22,7 +23,7 @@ public class RateLimitService {
             Long.class
     );
 
-    private record Window(long startedAt, int count) {
+    private record Window(long startedAt, int count, long windowMillis) {
     }
 
     private final ConcurrentHashMap<String, Window> localWindows = new ConcurrentHashMap<>();
@@ -85,14 +86,26 @@ public class RateLimitService {
 
     private boolean allowLocally(String key, int limit, long windowMillis) {
         long now = Instant.now(clock).toEpochMilli();
-        Window next = localWindows.compute(key, (ignored, old) ->
-                old == null || now - old.startedAt() >= windowMillis
-                        ? new Window(now, 1)
-                        : new Window(old.startedAt(), old.count() + 1));
-        if (localWindows.size() > 10_000) {
-            localWindows.entrySet().removeIf(entry -> now - entry.getValue().startedAt() >= windowMillis * 2);
+        synchronized (localWindows) {
+            Window old = localWindows.get(key);
+            if (old == null) {
+                localWindows.entrySet().removeIf(entry ->
+                        now - entry.getValue().startedAt() >= entry.getValue().windowMillis() * 2);
+                if (localWindows.size() >= MAX_LOCAL_WINDOWS) {
+                    log.warn("Local rate-limit capacity reached; rejecting a new rate-limit key");
+                    return false;
+                }
+                localWindows.put(key, new Window(now, 1, windowMillis));
+                return true;
+            }
+            if (now - old.startedAt() >= windowMillis) {
+                localWindows.put(key, new Window(now, 1, windowMillis));
+                return true;
+            }
+            Window next = new Window(old.startedAt(), old.count() + 1, windowMillis);
+            localWindows.put(key, next);
+            return next.count() <= limit;
         }
-        return next.count() <= limit;
     }
 
     private static long retryAfterSeconds(long windowMillis) {

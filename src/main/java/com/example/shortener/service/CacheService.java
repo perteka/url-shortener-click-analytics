@@ -117,6 +117,19 @@ public class CacheService {
         }
     }
 
+    public void putAfterCommit(String code, Long id, String url, Instant expiresAt) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    put(code, id, url, expiresAt);
+                }
+            });
+        } else {
+            put(code, id, url, expiresAt);
+        }
+    }
+
     public void evict(String code) {
         if (redisGate.isOpen()) {
             return;

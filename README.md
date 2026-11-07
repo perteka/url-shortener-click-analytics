@@ -27,7 +27,7 @@ A production-oriented Java 17 / Spring Boot REST API for creating short links, r
 
 ```bash
 cp .env.example .env
-# Edit .env and replace API_KEY, API_KEY_PEPPER and POSTGRES_PASSWORD.
+# Edit .env and fill in all secret values with strong, distinct secrets.
 docker compose up --build -d
 ```
 
@@ -35,7 +35,7 @@ The API listens on `http://localhost:8080` and PostgreSQL/Redis are bound to `12
 
 The Docker image starts with the `prod` profile. Use `SPRING_PROFILES_ACTIVE=dev` only for local experiments; production runs fail fast when `APP_BASE_URL`, `API_KEY` or `API_KEY_PEPPER` are missing or too weak.
 
-If `.env` is omitted, Compose falls back to development-only default secrets; the fallback API key is `compose-development-key-0123456789abcdef`. Replace these values before exposing the service beyond your machine.
+Compose requires non-empty secrets from `.env`; there are no working default credentials. The example file deliberately leaves secret values blank, so Compose refuses to start until they are provided.
 
 ```bash
 curl http://localhost:8080/actuator/health/liveness
@@ -44,11 +44,14 @@ curl http://localhost:8080/actuator/health/liveness
 ## Local development without the app container
 
 ```bash
+cp .env.example .env
+# Fill in all secret values, then keep REDIS_PASSWORD available
+# to the local application process as an environment variable.
 docker compose up -d postgres redis
-mvn spring-boot:run
+SPRING_PROFILES_ACTIVE=dev REDIS_PASSWORD=your-redis-password mvn spring-boot:run
 ```
 
-The local development key is `local-development-key`. It is only a development default; set `API_KEY` and `API_KEY_PEPPER` to strong random values everywhere else.
+The local development key is `local-development-key`. The application defaults to the `prod` profile when no profile is selected, so explicitly activate `dev` for local development. Set `API_KEY` and `API_KEY_PEPPER` to strong random values everywhere else.
 
 ## Deployment
 
@@ -161,6 +164,8 @@ curl "$BASE/api/urls/spring1/analytics?days=30" -H "X-API-Key: $KEY"
 
 The series is gap-filled for every UTC day in the requested range. `totalClicks` is the sum for that range. Referrers are normalized to their host and the response is limited to the top 50 sources; clicks without a referrer are reported as `direct`. Device categories are `MOBILE`, `TABLET`, `DESKTOP`, `BOT` and `UNKNOWN`.
 
+Only the normalized referrer host is stored; raw referrer paths and query strings are discarded. For deployments that should only redirect to an organization's domains, configure `ALLOWED_DESTINATION_HOSTS` with comma-separated exact hostnames. When unset, any valid HTTP(S) host is accepted, as expected for a general-purpose shortener.
+
 ### API key management
 
 The key configured through `API_KEY` is created as an admin key at startup and promoted if it already exists. Admin keys can manage other keys:
@@ -204,7 +209,7 @@ All settings can be supplied as environment variables. Durations use ISO-8601 (`
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `SPRING_PROFILES_ACTIVE` | none (`prod` in the Docker image) | `prod` enables fail-fast secret validation |
+| `SPRING_PROFILES_ACTIVE` | `prod` | `prod` enables fail-fast secret validation; use `dev` for local development |
 | `SERVER_PORT` | `8080` | HTTP port |
 | `APP_BASE_URL` | `http://localhost:8080` | Base URL used in create responses |
 | `DATABASE_URL` | `jdbc:postgresql://localhost:5432/shortener` | JDBC URL |
@@ -221,8 +226,10 @@ All settings can be supplied as environment variables. Durations use ISO-8601 (`
 | `CLEANUP_BATCH_SIZE` | `500` | Batched cleanup size |
 | `CLEANUP_CRON` | `0 0 3 * * *` | Cleanup schedule in UTC |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:3000,http://localhost:5173` | Comma-separated allowed origins; `*` allows all |
+| `TRUSTED_PROXIES` | empty | Comma-separated proxy IP addresses allowed to supply `X-Forwarded-For` |
+| `ALLOWED_DESTINATION_HOSTS` | empty | Optional comma-separated exact host allowlist for redirect destinations; empty allows any valid HTTP(S) host |
 
-In the `prod` profile startup fails unless `API_KEY` and `API_KEY_PEPPER` are at least 32 characters and are not the development defaults. Changing `API_KEY_PEPPER` invalidates all stored key hashes; rotate it only with a planned key migration.
+In the `prod` profile startup fails unless `API_KEY` and `API_KEY_PEPPER` are at least 32 characters and do not contain known placeholder or development strings. Changing `API_KEY_PEPPER` invalidates all stored key hashes; rotate it only with a planned key migration.
 
 ## Database and migrations
 
@@ -230,6 +237,8 @@ Flyway runs automatically at startup:
 
 - `V1__init.sql` creates the baseline schema.
 - `V2__add_soft_delete_and_referrer.sql` adds soft-delete fields, referrer hosts and indexes.
+- `V3__add_click_referrer_composite_index.sql` adds the analytics composite index.
+- `V4__remove_raw_referrer.sql` drops stored raw referrer URLs; only the host remains.
 
 Hibernate uses `ddl-auto=validate`; the application fails fast if the schema does not match. `baseline-on-migrate` allows databases created by older `ddl-auto=update` builds to adopt Flyway safely.
 
@@ -248,7 +257,7 @@ Readiness intentionally excludes Redis so a Redis outage removes only caching an
 
 Operational recommendations:
 
-- Terminate TLS at a reverse proxy or load balancer and keep `server.forward-headers-strategy=native` so client IPs and HTTPS detection work.
+- Terminate TLS at a reverse proxy or load balancer. Set `TRUSTED_PROXIES` to the proxy IP addresses so the app can safely resolve client IPs; configure HSTS at the proxy because the app does not trust forwarded headers globally.
 - Restrict `/actuator/**` and especially `/actuator/prometheus` at the network or ingress layer.
 - Store secrets in a secret manager, not in images or source control.
 - Run more than one instance behind a load balancer; cleanup and cache invalidation are safe across instances.

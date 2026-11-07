@@ -6,7 +6,7 @@ services:
     environment:
       POSTGRES_DB: shortener
       POSTGRES_USER: shortener
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-shortener}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
     ports:
       - "127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"
     volumes:
@@ -20,13 +20,15 @@ services:
 
   redis:
     image: redis:7-alpine
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
     ports:
       - "127.0.0.1:${REDIS_HOST_PORT:-6379}:6379"
     volumes:
       - redis_data:/data
-    command: ["redis-server", "--appendonly", "yes"]
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}"]
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "REDISCLI_AUTH=$$REDIS_PASSWORD redis-cli ping | grep -q PONG"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -51,8 +53,11 @@ services:
       DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-shortener}
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      API_KEY: ${API_KEY:-compose-development-key-0123456789abcdef}
-      API_KEY_PEPPER: ${API_KEY_PEPPER:-compose-development-pepper-0123456789abcdef}
+      API_KEY: ${API_KEY:?Set API_KEY in .env}
+      API_KEY_PEPPER: ${API_KEY_PEPPER:?Set API_KEY_PEPPER in .env}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+      ALLOWED_DESTINATION_HOSTS: ${ALLOWED_DESTINATION_HOSTS:-}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173}
     ports:
       - "127.0.0.1:${APP_HOST_PORT:-8080}:8080"

@@ -43,7 +43,11 @@ class ShortUrlServiceTest {
     private final ShortUrlWriter writer = mock(ShortUrlWriter.class);
 
     private ShortUrlService service() {
-        return new ShortUrlService(urls, cache, mapper, writer, FIXED_CLOCK);
+        return service(new DestinationHostPolicy(""));
+    }
+
+    private ShortUrlService service(DestinationHostPolicy policy) {
+        return new ShortUrlService(urls, cache, mapper, writer, policy, FIXED_CLOCK);
     }
 
     private ApiKey owner() {
@@ -68,7 +72,7 @@ class ShortUrlServiceTest {
                 new CreateShortUrlRequest("https://spring.io", "spring1", null), owner);
 
         assertEquals(response, result);
-        verify(cache).put("spring1", 10L, "https://spring.io", null);
+        verify(cache).putAfterCommit("spring1", 10L, "https://spring.io", null);
     }
 
     @Test
@@ -126,6 +130,14 @@ class ShortUrlServiceTest {
                 new CreateShortUrlRequest("https://user:password@example.com", null, null), owner));
         assertThrows(BadRequestException.class, () -> service().create(
                 new CreateShortUrlRequest("https://example.com/a b", null, null), owner));
+        verifyNoInteractions(writer);
+    }
+
+    @Test
+    void enforcesConfiguredDestinationHostAllowlist() {
+        assertThrows(BadRequestException.class, () -> service(new DestinationHostPolicy("example.com, spring.io"))
+                .create(new CreateShortUrlRequest("https://attacker.example/path", "spring1", null), owner()));
+
         verifyNoInteractions(writer);
     }
 
